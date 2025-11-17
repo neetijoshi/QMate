@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>QMate - Login / Register</title>
+
+<style>
+  :root{
+    --accent:#ecd386;
+    --brand:#4d69a5;
+    --focus:#5ba8a6;
+    --bg:#eae6dd;
+    --text:#323232;
+  }
+  *{ box-sizing:border-box; }
+
+  body{
+    font-family: Arial, sans-serif;
+    background: var(--bg);
+    margin:0;
+    height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .container{
+    width:360px;
+    background:#fff;
+    padding:26px;
+    border-radius:10px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.08);
+  }
+
+  .title{
+    text-align:center;
+    font-size:22px;
+    color:var(--brand);
+    font-weight:700;
+    margin-bottom:12px;
+  }
+
+  .error{
+    color:#d43f3f;
+    font-size:13px;
+    text-align:center;
+    min-height:18px;
+    margin-bottom:8px;
+  }
+
+  .success{
+    color: #2a8a4a;
+    font-size:13px;
+    text-align:center;
+    min-height:18px;
+    margin-bottom:8px;
+  }
+
+  .field{
+    width:100%;
+    padding:12px;
+    margin:8px 0 12px;
+    border:1px solid #aaa;
+    border-radius:6px;
+    font-size:14px;
+  }
+  .field:focus{
+    border-color:var(--focus);
+    outline:none;
+  }
+
+  .pw-wrap{ position:relative; margin-bottom:12px; }
+  .pw-input{
+    width:100%;
+    padding:12px 40px 12px 12px;
+    border-radius:6px;
+    border:1px solid #aaa;
+    font-size:14px;
+  }
+  .pw-input:focus{
+    border-color:var(--focus);
+    outline:none;
+  }
+
+  .eye-btn{
+    position:absolute;
+    right:8px;
+    top:50%;
+    transform:translateY(-50%);
+    background:transparent;
+    border:none;
+    cursor:pointer;
+    padding:4px;
+    color:#666;
+    font-size:14px;
+  }
+
+  button.submit{
+    width:100%;
+    padding:11px;
+    background:var(--accent);
+    border:none;
+    border-radius:6px;
+    color:var(--text);
+    font-weight:700;
+    cursor:pointer;
+    font-size:15px;
+  }
+
+  .switch{
+    text-align:center;
+    margin-top:8px;
+    color:var(--brand);
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+  }
+
+  .guest-btn{
+    background:none;
+    border:none;
+    color:#666;
+    font-size:13px;
+    margin-top:6px;
+    text-align:center;
+    cursor:pointer;
+    width:100%;
+  }
+  .guest-btn:hover{
+    color:var(--brand);
+    text-decoration:underline;
+  }
+
+  .hidden { display:none; }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <div class="title">QMate</div>
+
+  <div id="msgError" class="error">{{ error|default('') }}</div>
+  <div id="msgSuccess" class="success">{{ success|default('') }}</div>
+
+  <!-- LOGIN FORM -->
+  <form id="loginForm" method="POST" action="/login" novalidate>
+    <input class="field" type="email" name="email" placeholder="Email" required />
+
+    <div class="pw-wrap">
+      <input class="pw-input" type="password" id="loginPass" name="password" placeholder="Password" required />
+      <button type="button" class="eye-btn" onclick="togglePassword('loginPass')"></button>
+    </div>
+<br><br>
+    <button class="submit" type="submit">Login</button>
+
+    <button class="guest-btn" type="button" onclick="location.href='/guest_dashboard'">
+      Continue as Guest →
+    </button>
+
+    <div class="switch" onclick="openRegister()">New user? Register</div>
+  </form>
+
+  <!-- REGISTER FORM -->
+  <form id="registerForm" class="hidden" method="POST" action="/register" novalidate>
+
+    <input class="field" type="text" name="name" placeholder="Full name" value="{{ name|default('') }}" required />
+
+    <input class="field" type="email" name="email" placeholder="Email" value="{{ email|default('') }}" required />
+
+    <div class="pw-wrap">
+      <input class="pw-input" id="regPass" type="password" name="password" placeholder="Password" required />
+      <button type="button" class="eye-btn" onclick="togglePassword('regPass')"></button>
+    </div>
+
+    <div class="pw-wrap">
+      <input class="pw-input" id="confirmPass" type="password" name="confirm" placeholder="Confirm Password" required />
+      <button type="button" class="eye-btn" onclick="togglePassword('confirmPass')"></button>
+    </div>
+<br><br>
+    <button class="submit" type="submit">Register</button>
+
+    <div class="switch" onclick="openLogin()">Already have an account? Login</div>
+  </form>
+</div>
+
+<script>
+  /* SAFEST WAY — serverShowRegister is always a string */
+  const serverShowRegister = "{{ show_register|default(false) }}";
+  const showRegister = (serverShowRegister === "True" || serverShowRegister === "true");
+
+  function openRegister() {
+    document.getElementById("loginForm").classList.add("hidden");
+    document.getElementById("registerForm").classList.remove("hidden");
+  }
+
+  function openLogin() {
+    document.getElementById("registerForm").classList.add("hidden");
+    document.getElementById("loginForm").classList.remove("hidden");
+  }
+
+  function togglePassword(id) {
+    const el = document.getElementById(id);
+    el.type = el.type === "password" ? "text" : "password";
+  }
+
+  // On page load, open register if server told us to
+  window.addEventListener("DOMContentLoaded", () => {
+    if (showRegister) openRegister();
+  });
+</script>
+
+</body>
+</html>

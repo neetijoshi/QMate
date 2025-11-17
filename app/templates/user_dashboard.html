@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>QMate User Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<style>
+:root{
+  --accent:#ecd386;
+  --brand:#4d69a5;
+  --focus:#5ba8a6;
+  --bg:#eae6dd;
+  --text:#323232;
+}
+
+body{
+  margin:0; padding:0;
+  font-family:Arial, Helvetica, sans-serif;
+  background:var(--bg);
+}
+
+/* NAVBAR */
+.navbar{
+  background:#fff;
+  padding:15px 40px;
+  display:flex;
+  justify-content:space-between;
+  border-bottom:1px solid #ddd;
+  align-items:center;
+}
+.navbar h2{
+  margin:0; color:var(--brand); font-weight:600;
+}
+.user-type{
+  display:flex; gap:10px;
+}
+.user-type button{
+  border:1px solid var(--brand);
+  padding:6px 14px;
+  border-radius:20px;
+  background:#fff;
+  cursor:pointer;
+  transition:0.2s;
+}
+.user-type button:hover{
+  background:#f3f3f3;
+}
+.user-type button.active{
+  background:var(--brand);
+  color:white;
+}
+
+/* LAYOUT */
+.container{
+  display:flex;
+  padding:40px;
+}
+
+/* SIDEBAR */
+.sidebar{
+  width:240px;
+  background:#fff;
+  border-radius:12px;
+  padding:18px;
+  height:fit-content;
+}
+.sidebar button{
+  width:100%;
+  background:none;
+  border:none;
+  cursor:pointer;
+  text-align:left;
+  padding:12px 10px;
+  border-radius:8px;
+  font-size:15px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  color:var(--text);
+  transition:0.2s;
+}
+.sidebar button:hover{
+  background:#f3f3f3;
+}
+.sidebar button.active{
+  background:var(--brand);
+  color:white;
+}
+
+/* LOGOUT BUTTON (permanent accent color) */
+.sidebar button.logout-btn{
+  background:var(--accent);
+  color:var(--text);
+  font-weight:600;
+  margin-top:20px;
+  justify-content:center;
+  text-align:center;
+}
+.sidebar button.logout-btn:hover{
+  filter:brightness(0.95);
+}
+
+/* CONTENT AREA */
+.content{
+  flex:1;
+  margin-left:30px;
+}
+
+.page{
+  background:#fff;
+  padding:25px;
+  border-radius:12px;
+  display:none;
+}
+.page.active{
+  display:block;
+}
+
+h3{ color:var(--brand); margin-top:0; }
+
+/* MAIN BUTTONS */
+.main-btn{
+  padding:12px 20px;
+  width:100%;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  background-color: var(--accent);
+  color:var(--text);
+  font-weight:600;
+  transition:0.2s;
+}
+.main-btn:hover{
+  filter:brightness(0.95);
+}
+
+/* disabled style */
+.main-btn[disabled]{
+  cursor:not-allowed;
+  opacity:0.75;
+}
+.small-note{
+  margin-top:10px;
+  font-size:14px;
+  color:#666;
+}
+.small-note a{ color:var(--brand); text-decoration:none; font-weight:600; }
+</style>
+</head>
+
+<body>
+
+<!-- NAVBAR -->
+<div class="navbar">
+  <h2>QMate</h2>
+  <div class="user-type">
+    <button class="active">User</button>
+    <button onclick="window.location.href='/'">Admin</button>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="container">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <button class="active" onclick="switchPage('getToken', this)"><i class="fa-solid fa-ticket"></i> Get Token</button>
+    <button onclick="switchPage('queueStatus', this)"><i class="fa-solid fa-bars-progress"></i> Queue Status</button>
+    <button onclick="switchPage('notifications', this)"><i class="fa-solid fa-bell"></i> Notifications</button>
+    <button class="logout-btn" onclick="logoutUser()"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+  </div>
+
+  <!-- CONTENT AREA -->
+  <div class="content">
+    <!-- Get Token Page -->
+    <div class="page active" id="getToken">
+      <h3>Get Queue Token</h3>
+      <p>Select a service queue to join and get your token number.</p>
+
+      <label>Available Queues</label><br><br>
+      <select id="queueSelect" style="width:100%; padding:12px; border:1px solid #ccc; border-radius:6px;">
+        <option value="">Select a queue to join</option>
+        <option>Billing</option>
+        <option>General Helpdesk</option>
+        <option>Document Verification</option>
+      </select><br><br>
+
+      <!-- guest vs logged-in button -->
+      {% if guest %}
+        <button class="main-btn" disabled>Login to get tokens.</button>
+        <div class="small-note">
+          Please <a href="{{ url_for('main.index') }}">login or register</a> to get a token.
+        </div>
+      {% else %}
+        <button id="getTokenBtn" class="main-btn" onclick="requestToken()">Get My Token</button>
+      {% endif %}
+
+    </div>
+
+    <!-- Queue Status Page -->
+    <div class="page" id="queueStatus">
+      <h3>Current Queue Status</h3>
+      <p>Live waiting numbers and your current position will be shown here.</p>
+    </div>
+
+    <!-- Notifications Page -->
+    <div class="page" id="notifications">
+      <h3>Notifications</h3>
+      <p>Your updates and alerts will appear here.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchPage(pageId, btn) {
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(pageId).classList.add('active');
+
+  // Update sidebar active button
+  document.querySelectorAll('.sidebar button').forEach(b => b.classList.remove('active'));
+  if(!btn.classList.contains('logout-btn')) btn.classList.add('active');
+}
+
+// Logout redirect
+function logoutUser() {
+  window.location.href = "/logout";
+}
+
+// JS token request (example)
+function requestToken(){
+  const sel = document.getElementById('queueSelect');
+  if(!sel.value){
+    alert('Please select a queue first.');
+    return;
+  }
+
+  // TODO: replace with actual fetch POST to server endpoint to create token
+  // Example placeholder:
+  alert('Token requested for "' + sel.value + '". (Implement server call to actually create token.)');
+}
+</script>
+
+</body>
+</html>
