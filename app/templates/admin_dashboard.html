@@ -136,7 +136,7 @@ h2 {
   text-align: center;
   box-shadow: 0 2px 5px rgba(0,0,0,0.08);
 }
-.card h4 {
+.card h4 { 
   color: var(--primary);
   margin-bottom: 8px;
 }
@@ -171,6 +171,61 @@ h2 {
 .action-btn:hover {
   background-color: #e1c973;
 }
+/* OPTIMIZATION FORM */
+.optimization-card {
+  max-width: 480px;
+  background: #f9f9f9;
+  padding: 28px;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  margin-top: 20px;
+}
+
+.optimization-card label {
+  font-weight: 600;
+  color: var(--primary);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.optimization-card input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  margin-bottom: 18px;
+  transition: all 0.2s ease;
+}
+
+.optimization-card input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(77,105,165,0.2);
+}
+
+.optimization-card .action-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+}
+
+#optMsg {
+  margin-top: 12px;
+  font-weight: 500;
+}
+.optimization-card select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  margin-bottom: 18px;
+  background: white;
+}
+
 </style>
 </head>
 
@@ -195,7 +250,7 @@ h2 {
     <button onclick="switchPage(event, 'optimization')"><i class="fa-solid fa-gauge-high"></i> Optimization</button>
     <button onclick="switchPage(event, 'reports')"><i class="fa-solid fa-file-lines"></i> Reports</button>
     <div class="logout">
-      <button onclick="window.location.href='/'"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+      <button onclick="window.location.href='/logout'"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
     </div>
   </div>
 
@@ -219,39 +274,59 @@ h2 {
       <p>Monitor and control queues in real time:</p>
 
       <table class="queue-table">
-        <tr>
-          <th>Queue Name</th>
-          <th>Customers Waiting</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-        <tr>
-          <td>General Service</td>
-          <td>35</td>
-          <td>Active</td>
-          <td>
-            <button class="action-btn">Pause</button>
-            <button class="action-btn">Next</button>
-          </td>
-        </tr>
-        <tr>
-          <td>Priority Queue</td>
-          <td>12</td>
-          <td>Paused</td>
-          <td>
-            <button class="action-btn">Resume</button>
-            <button class="action-btn">Next</button>
-          </td>
-        </tr>
-      </table>
+  <thead>
+    <tr>
+      <th>Queue Name</th>
+      <th>Customers Waiting</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+
+  <tbody id="queueTableBody">
+    <!-- rows will come from JavaScript -->
+  </tbody>
+</table>
+<div id="queueError" style="
+  margin-top: 15px;
+  color: #c0392b;
+  font-weight: 500;
+  display: none;
+">
+</div>
+
     </div>
 
     <!-- OPTIMIZATION -->
-    <div id="optimization" class="page">
-      <h2>Optimization</h2>
-      <p>System load balancing and performance overview.</p>
-    </div>
+  <div id="optimization" class="page">
+  <h2>Queue Optimization</h2>
 
+  <div class="optimization-card">
+
+    <label>Select Service</label>
+    <select id="queueSelect" required>
+      <option value="" disabled selected>-- Choose a Service --</option>
+    </select>
+
+    <label>Total Counters</label>
+    <input type="number" id="counterCount"
+           placeholder="Enter total counters (e.g. 3)">
+
+    <label>Counter Service Times (minutes)</label>
+    <p style="font-size: 13px; color: #666;">
+      Enter comma-separated values (example: 5,3,2)
+    </p>
+    <input type="text" id="serviceTimes"
+           placeholder="Example: 5,3,2  (Counter 1 → 5 min)">
+
+    <button onclick="saveOptimization()" class="action-btn">
+      Save Optimization
+    </button>
+
+    <p id="optMsg"></p>
+
+  </div>
+</div>
     <!-- REPORTS -->
     <div id="reports" class="page">
       <h2>Reports</h2>
@@ -276,6 +351,176 @@ function switchPage(event, pageName) {
   event.currentTarget.classList.add('active');
 }
 </script>
+<script>
+function loadQueues() {
+  fetch("/admin/queue_status")
+    .then(res => res.json())
+    .then(data => {
+      const tbody = document.getElementById("queueTableBody");
+      const errorDiv = document.getElementById("queueError");
+
+      tbody.innerHTML = "";            // clear old rows
+      errorDiv.style.display = "none"; // hide error
+
+      if (data.length === 0) {
+        errorDiv.innerText = "No queues available.";
+        errorDiv.style.display = "block";
+        return;
+      }
+
+      data.forEach(q => {
+        const row = `
+          <tr>
+            <td>${q.name}</td>
+            <td>${q.waiting}</td>
+            <td>${q.status}</td>
+            <td>
+              <button class="action-btn">Pause</button>
+              <button class="action-btn" onclick="serveNext(${q.id})">Next</button>
+            </td>
+          </tr>
+        `;
+        tbody.innerHTML += row;
+      });
+    })
+    .catch(() => {
+      const errorDiv = document.getElementById("queueError");
+      errorDiv.innerText = "Failed to load queues.";
+      errorDiv.style.display = "block";
+    });
+}
+
+// auto refresh
+setInterval(loadQueues, 3000);
+loadQueues();
+</script>
+
+<script>
+function serveNext(queueId) {
+  fetch("/admin/next_token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ queue_id: queueId })
+  })
+  .then(res => res.json())
+  .then(data => {
+    const errorDiv = document.getElementById("queueError");
+
+    if (data.message === "No active tokens") {
+      errorDiv.innerText = "No active tokens in this queue.";
+      errorDiv.style.display = "block";
+    } else {
+      errorDiv.style.display = "none";
+      loadQueues(); // refresh table only
+    }
+  })
+  .catch(() => {
+    const errorDiv = document.getElementById("queueError");
+    errorDiv.innerText = "Server error. Try again.";
+    errorDiv.style.display = "block";
+  });
+}
+</script>
+
+<!-- <script>
+function saveSettings() {
+  fetch("/admin/set_queue_settings", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      queue_id: Number(document.getElementById("queueId").value),
+      avg_service_time: Number(document.getElementById("serviceTime").value),
+      counters: Number(document.getElementById("counters").value)
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    document.getElementById("optMsg").innerText =
+      data.error ? data.error : data.message;
+  });
+}
+
+</script> -->
+
+<script>
+function loadAdminServices() {
+  fetch("/admin/my_services")
+    .then(res => res.json())
+    .then(data => {
+      const select = document.getElementById("queueSelect");
+
+      // reset
+      select.innerHTML =
+        `<option value="" disabled selected>-- Choose a Service --</option>`;
+
+      if (data.length === 0) {
+        const opt = document.createElement("option");
+        opt.text = "No services assigned";
+        opt.disabled = true;
+        select.appendChild(opt);
+        return;
+      }
+
+      data.forEach(service => {
+        const opt = document.createElement("option");
+        opt.value = service.id;
+        opt.text = service.name;
+        select.appendChild(opt);
+      });
+    });
+}
+
+// load when page opens
+loadAdminServices();
+</script>
+<script>
+function saveOptimization() {
+  const queueSelect = document.getElementById("queueSelect");
+  const counterCount = Number(document.getElementById("counterCount").value);
+  const serviceTimesRaw = document.getElementById("serviceTimes").value;
+
+  const optMsg = document.getElementById("optMsg");
+
+  if (!queueSelect.value) {
+    optMsg.innerText = "Please select a service";
+    return;
+  }
+
+  if (!counterCount || counterCount <= 0) {
+    optMsg.innerText = "Enter a valid counter count";
+    return;
+  }
+
+  const serviceTimes = serviceTimesRaw
+    .split(",")
+    .map(x => Number(x.trim()))
+    .filter(x => !isNaN(x));
+
+  if (serviceTimes.length !== counterCount) {
+    optMsg.innerText =
+      "Service times count must match total counters";
+    return;
+  }
+
+  fetch("/admin/set_queue_settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      queue_id: Number(queueSelect.value),
+      counters: counterCount,
+      service_times: serviceTimes
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    optMsg.innerText = data.message || data.error;
+  })
+  .catch(() => {
+    optMsg.innerText = "Server error. Try again.";
+  });
+}
+</script>
 
 </body>
 </html>
+
