@@ -5,7 +5,6 @@ db = SQLAlchemy()
 
 def create_app():
     app = Flask(__name__)
-
     app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+pymysql://root:joshineeti@localhost/qmate_db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = "qmate_secret_key"
