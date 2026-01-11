@@ -1514,7 +1514,7 @@ def admin_dashboard_stats():
     else:
         avg_wait = 0
 
-    # 4️⃣ Efficiency
+    #  Efficiency
     total_tokens = Token.query.count()
     efficiency = round(
         (len(served_tokens) / total_tokens) * 100, 2
