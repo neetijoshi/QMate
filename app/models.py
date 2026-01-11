@@ -31,11 +31,15 @@ class Token(db.Model):
     queue_id = db.Column(db.Integer, db.ForeignKey("queues.id"), nullable=False)
 
     counter_id = db.Column(db.Integer, db.ForeignKey("counters.id"))
-
+    postponed_until = db.Column(db.DateTime, nullable=True)
     token_number = db.Column(db.Integer, nullable=False)
     status = db.Column(db.String(20), default="ACTIVE")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime)
+    scheduled_time = db.Column(db.DateTime, nullable=True)   # ✅ NEW
+    served_at = db.Column(db.DateTime, nullable=True)  # ✅ ADD THIS
+
+
 
 
 class QueueSettings(db.Model):

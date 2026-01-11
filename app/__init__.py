@@ -11,6 +11,15 @@ def create_app():
 
     db.init_app(app)
 
+    from sqlalchemy import text
+
+    with app.app_context():
+        result = db.session.execute(text("SELECT DATABASE()")).fetchone()
+        print("CONNECTED DB:", result)
+
+    # import os
+    # print("DB FILE:", os.path.abspath("instance"))
+
     from .routes import main
     app.register_blueprint(main)
 

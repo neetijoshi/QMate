@@ -251,6 +251,14 @@ h2 {
     <button onclick="switchPage(event, 'reports')"><i class="fa-solid fa-file-lines"></i> Reports</button>
     <div class="logout">
       <button onclick="window.location.href='/logout'"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+          <div style="
+  margin-top:40px;
+  font-size:12px;
+  color:#999;
+  text-align:center;
+">
+  © 2026 QMate.
+</div>
     </div>
   </div>
 
@@ -261,41 +269,67 @@ h2 {
     <div id="dashboard" class="page active">
       <h2>Dashboard Overview</h2>
       <div class="cards">
-        <div class="card"><h4>Active Queues</h4><div class="value">4</div></div>
-        <div class="card"><h4>Total Waiting</h4><div class="value">127</div></div>
-        <div class="card"><h4>Avg Wait Time</h4><div class="value">18m</div></div>
-        <div class="card"><h4>Efficiency</h4><div class="value">94%</div></div>
-      </div>
+  <div class="card">
+    <h4>Active Queues</h4>
+    <div class="value" id="dQueues">0</div>
+  </div>
+
+  <div class="card">
+    <h4>Total Waiting</h4>
+    <div class="value" id="dWaiting">0</div>
+  </div>
+
+  <div class="card">
+    <h4>Avg Wait Time</h4>
+    <div class="value" id="dAvg">0 min</div>
+  </div>
+
+  <div class="card">
+    <h4>Efficiency</h4>
+    <div class="value" id="dEff">0%</div>
+  </div>
+</div>
+
     </div>
 
     <!-- MANAGE QUEUES -->
     <div id="manage" class="page">
-      <h2>Manage Queues</h2>
-      <p>Monitor and control queues in real time:</p>
+  <h2>Manage Queues</h2>
+  <p>Click a queue name to view its tokens</p>
 
-      <table class="queue-table">
-  <thead>
-    <tr>
-      <th>Queue Name</th>
-      <th>Customers Waiting</th>
-      <th>Status</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
+  <table class="queue-table">
+    <thead>
+      <tr>
+        <th>Queue Name</th>
+        <th>Customers Waiting</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="queueTableBody"></tbody>
+  </table>
 
-  <tbody id="queueTableBody">
-    <!-- rows will come from JavaScript -->
-  </tbody>
-</table>
-<div id="queueError" style="
-  margin-top: 15px;
-  color: #c0392b;
-  font-weight: 500;
-  display: none;
-">
+  <div id="queueError" style="margin-top:15px;color:#c0392b;display:none"></div>
+
+  <!-- ✅ TOKEN TABLE (INSIDE MANAGE PAGE) -->
+  <h3 style="margin-top:30px;color:#4d69a5;">Queue Tokens</h3>
+  <table class="queue-table" id="tokenTable" style="display:none;">
+    <thead>
+      <tr>
+        <th>Token</th>
+        <th>User</th>
+        <th>Email</th>
+        <th>Status</th>
+        <th>Joined</th>
+        <th>Scheduled</th>
+        <th>Paused Till</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tokenTableBody"></tbody>
+  </table>
 </div>
 
-    </div>
 
     <!-- OPTIMIZATION -->
   <div id="optimization" class="page">
@@ -329,15 +363,58 @@ h2 {
 </div>
     <!-- REPORTS -->
     <div id="reports" class="page">
-      <h2>Reports</h2>
-      <table class="queue-table">
-        <tr>
-          <th>Queue</th><th>Customers</th><th>Avg Wait</th><th>Satisfaction</th><th>Efficiency</th>
-        </tr>
-        <tr><td>General Service</td><td>458</td><td>22 min</td><td>4.1</td><td>92%</td></tr>
-        <tr><td>Priority Service</td><td>290</td><td>14 min</td><td>4.5</td><td>98%</td></tr>
-      </table>
+  <h2>Queue Performance Reports</h2>
+
+  <div class="cards">
+    <div class="card">
+      <h4>Total Tokens</h4>
+      <div class="value" id="rTotal">0</div>
     </div>
+    <!-- <div class="card">
+  <h4>Served Tokens</h4>
+  <div class="value" id="rServed">0</div>
+</div> -->
+
+    <div class="card">
+      <h4>Avg Wait (min)</h4>
+      <div class="value" id="rAvg">0</div>
+    </div>
+    <div class="card">
+      <h4>Efficiency</h4>
+      <div class="value" id="rEff">0%</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Hourly Load</h3>
+  <table class="queue-table">
+    <thead>
+      <tr>
+        <th>Hour</th>
+        <th>Tokens</th>
+      </tr>
+    </thead>
+    <tbody id="hourlyTable"></tbody>
+  </table>
+  <h3 style="margin-top:40px">Hourly Token Load</h3>
+<canvas id="hourlyChart" height="100" ></canvas>
+
+<h3 style="margin-top:40px">
+  Token Status Distribution
+</h3>
+
+<div style="
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  width:100%;
+">
+  <div style="width:500px; height:500px;">
+    <canvas id="statusChart"></canvas>
+  </div>
+</div>
+
+
+</div>
 
   </div>
 </div>
@@ -349,7 +426,12 @@ function switchPage(event, pageName) {
 
   document.querySelectorAll('.sidebar button').forEach(btn => btn.classList.remove('active'));
   event.currentTarget.classList.add('active');
+
+  if (pageName === "reports") {
+    loadReports();
+  }
 }
+
 </script>
 <script>
 function loadQueues() {
@@ -371,7 +453,11 @@ function loadQueues() {
       data.forEach(q => {
         const row = `
           <tr>
-            <td>${q.name}</td>
+            <td style="cursor:pointer;color:#4d69a5;font-weight:600"
+    onclick="loadQueueTokens(${q.id})">
+  ${q.name}
+</td>
+
             <td>${q.waiting}</td>
             <td>${q.status}</td>
             <td>
@@ -393,6 +479,8 @@ function loadQueues() {
 // auto refresh
 setInterval(loadQueues, 3000);
 loadQueues();
+
+
 </script>
 
 <script>
@@ -519,6 +607,199 @@ function saveOptimization() {
     optMsg.innerText = "Server error. Try again.";
   });
 }
+</script>
+<script>
+function loadQueueTokens(queueId) {
+  fetch(`/admin/queue_tokens/${queueId}`)
+    .then(res => res.json())
+    .then(tokens => {
+      const table = document.getElementById("tokenTable");
+      const tbody = document.getElementById("tokenTableBody");
+
+      tbody.innerHTML = "";
+      table.style.display = "table";
+
+      if (tokens.length === 0) {
+        tbody.innerHTML = `
+          <tr><td colspan="8">No tokens in this queue</td></tr>
+        `;
+        return;
+      }
+
+      tokens.forEach(t => {
+        tbody.innerHTML += `
+          <tr>
+            <td>${t.token_number}</td>
+            <td>${t.user_name}</td>
+            <td>${t.email}</td>
+            <td>${t.status}</td>
+            <td>${t.joined_at}</td>
+            <td>${t.scheduled_time || "-"}</td>
+            <td>${t.postponed_until || "-"}</td>
+            <td>
+              ${actionButtons(t)}
+            </td>
+          </tr>
+        `;
+      });
+    });
+}
+
+function actionButtons(t) {
+  let btns = "";
+
+  if (t.status === "ACTIVE") {
+    btns += `<button class="action-btn" onclick="adminRemove(${t.token_id})">Remove</button>`;
+  }
+
+  if (t.status === "PAUSED") {
+    btns += `<button class="action-btn" onclick="adminResume(${t.token_id})">Resume</button>`;
+  }
+
+  return btns || "-";
+}
+</script>
+<script>
+function adminRemove(tokenId) {
+  fetch("/admin/remove_token", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ token_id: tokenId })
+  })
+  .then(() => loadQueues());
+}
+
+function adminResume(tokenId) {
+  fetch("/admin/resume_token", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ token_id: tokenId })
+  })
+  .then(() => loadQueues());
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let hourlyChart, statusChart;
+function formatHour(hour) {
+  const h = Number(hour);
+  const suffix = h >= 12 ? "PM" : "AM";
+  const hour12 = ((h + 11) % 12) + 1;
+  return `${hour12}:00 ${suffix}`;
+}
+
+function loadReports() {
+  fetch("/admin/reports")
+    .then(res => res.json())
+    .then(data => {
+
+      // Cards
+      document.getElementById("rTotal").innerText = data.total_tokens;
+      document.getElementById("rAvg").innerText = data.avg_wait + " min";
+      document.getElementById("rEff").innerText = data.efficiency + "%";
+
+      // ---------- HOURLY TABLE ----------
+      const tbody = document.getElementById("hourlyTable");
+      tbody.innerHTML = "";
+
+      if (!data.hourly || data.hourly.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='2'>No data yet</td></tr>";
+      } else {
+        data.hourly.forEach(h => {
+          tbody.innerHTML += `
+            <tr>
+              <td>${formatHour(h.hour)}</td>
+              <td>${h.count}</td>
+            </tr>
+          `;
+        });
+      }
+
+      // ---------- HOURLY BAR CHART ----------
+      function formatHour(hour) {
+  const h = Number(hour);
+  const suffix = h >= 12 ? "PM" : "AM";
+  const hour12 = ((h + 11) % 12) + 1;
+  return `${hour12}:00 ${suffix}`;
+}
+
+      const labels = data.hourly.map(h => formatHour(h.hour));
+      const values = data.hourly.map(h => h.count);
+
+      if (hourlyChart) hourlyChart.destroy();
+
+      hourlyChart = new Chart(
+        document.getElementById("hourlyChart"),
+        {
+          type: "bar",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: "Tokens per Hour",
+              data: values
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                beginAtZero: true
+              }
+            }
+          }
+        }
+      );
+
+      // ---------- STATUS PIE CHART ----------
+      if (statusChart) statusChart.destroy();
+
+statusChart = new Chart(
+  document.getElementById("statusChart"),
+  {
+    type: "pie",
+    data: {
+      labels: ["Served", "Active", "Scheduled", "Cancelled"],
+      datasets: [{
+        data: [
+          data.served_tokens,
+          data.active_tokens,
+          data.scheduled_tokens,
+          data.cancelled_tokens
+        ]
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: "right"
+        }
+      }
+    }
+  }
+);
+
+  
+    });
+}
+</script>
+<script>
+function loadDashboardStats() {
+  fetch("/admin/dashboard_stats")
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("dQueues").innerText = data.active_queues;
+      document.getElementById("dWaiting").innerText = data.waiting_tokens;
+      document.getElementById("dAvg").innerText = data.avg_wait + " min";
+      document.getElementById("dEff").innerText = data.efficiency + "%";
+    });
+}
+
+// Load once when page opens
+loadDashboardStats();
+
+// 🔁 Auto refresh every 5 seconds
+setInterval(loadDashboardStats, 5000);
 </script>
 
 </body>
