@@ -225,6 +225,28 @@ h2 {
   margin-bottom: 18px;
   background: white;
 }
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #4d69a5;
+  color: white;
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-weight: 500;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+  z-index: 9999;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 
 </style>
 </head>
@@ -418,6 +440,8 @@ h2 {
 
   </div>
 </div>
+<div id="toast" class="toast"></div>
+
 
 <script>
 function switchPage(event, pageName) {
@@ -461,9 +485,14 @@ function loadQueues() {
             <td>${q.waiting}</td>
             <td>${q.status}</td>
             <td>
-              <button class="action-btn">Pause</button>
-              <button class="action-btn" onclick="serveNext(${q.id})">Next</button>
-            </td>
+  <button class="action-btn" onclick="pauseQueue(${q.id})">
+    Pause
+  </button>
+  <button class="action-btn" onclick="serveNext(${q.id})">
+    Next
+  </button>
+</td>
+
           </tr>
         `;
         tbody.innerHTML += row;
@@ -491,17 +520,16 @@ function serveNext(queueId) {
     body: JSON.stringify({ queue_id: queueId })
   })
   .then(res => res.json())
-  .then(data => {
-    const errorDiv = document.getElementById("queueError");
 
+  .then(data => {
     if (data.message === "No active tokens") {
-      errorDiv.innerText = "No active tokens in this queue.";
-      errorDiv.style.display = "block";
-    } else {
-      errorDiv.style.display = "none";
-      loadQueues(); // refresh table only
-    }
-  })
+    showToast("No active token in this queue");
+  } else {
+    showToast(`Token number ${data.token_number} served`);
+    loadQueues();
+  }
+})
+
   .catch(() => {
     const errorDiv = document.getElementById("queueError");
     errorDiv.innerText = "Server error. Try again.";
@@ -599,13 +627,18 @@ function saveOptimization() {
       service_times: serviceTimes
     })
   })
-  .then(res => res.json())
-  .then(data => {
-    optMsg.innerText = data.message || data.error;
-  })
-  .catch(() => {
-    optMsg.innerText = "Server error. Try again.";
-  });
+  .then(async res => {
+  const data = await res.json();
+  if (!res.ok) throw data;
+  return data;
+})
+.then(data => {
+  optMsg.innerText = data.message;
+})
+.catch(err => {
+  optMsg.innerText = err.error || "Server error";
+});
+
 }
 </script>
 <script>
@@ -649,34 +682,50 @@ function actionButtons(t) {
   let btns = "";
 
   if (t.status === "ACTIVE") {
-    btns += `<button class="action-btn" onclick="adminRemove(${t.token_id})">Remove</button>`;
-  }
+  btns += `<button class="action-btn"
+    onclick="adminRemove(${t.token_id}, '${t.user_name}')">
+    Remove
+  </button>`;
+}
+
 
   if (t.status === "PAUSED") {
-    btns += `<button class="action-btn" onclick="adminResume(${t.token_id})">Resume</button>`;
-  }
+  btns += `<button class="action-btn"
+    onclick="adminResume(${t.token_id}, '${t.user_name}')">
+    Resume
+  </button>`;
+}
+
 
   return btns || "-";
 }
 </script>
 <script>
-function adminRemove(tokenId) {
+function adminRemove(tokenId, userName) {
   fetch("/admin/remove_token", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({ token_id: tokenId })
   })
-  .then(() => loadQueues());
+  .then(() => {
+    showToast(`${userName} has been removed from the queue`);
+    loadQueues();
+  });
 }
 
-function adminResume(tokenId) {
+
+function adminResume(tokenId, userName) {
   fetch("/admin/resume_token", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({ token_id: tokenId })
   })
-  .then(() => loadQueues());
+  .then(() => {
+    showToast(`${userName} is added back in the queue`);
+    loadQueues();
+  });
 }
+
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
@@ -800,6 +849,34 @@ loadDashboardStats();
 
 // 🔁 Auto refresh every 5 seconds
 setInterval(loadDashboardStats, 5000);
+</script>
+<script>
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  toast.innerText = message;
+  toast.classList.add("show");
+
+  setTimeout(() => {
+    toast.classList.remove("show");
+  }, 3000);
+}
+</script>
+<script>
+function pauseQueue(queueId) {
+  fetch("/admin/pause_queue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ queue_id: queueId })
+  })
+  .then(res => res.json())
+  .then(data => {
+    showToast(data.message || "Queue paused");
+    loadQueues();
+  })
+  .catch(() => {
+    showToast("Failed to pause queue");
+  });
+}
 </script>
 
 </body>

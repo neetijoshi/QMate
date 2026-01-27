@@ -527,6 +527,9 @@ body {
     <div id="nowServing"
      style="padding:10px;font-weight:600;color:#4d69a5;">
 </div>
+  <div id="pausedAlerts"
+     style="padding:10px;font-weight:600;color:#e53935;">
+</div>
 
   </div>
 
@@ -898,18 +901,43 @@ function checkNowServing() {
       }
     });
 }
+let lastPausedQueues = [];
+
+function checkPausedQueues() {
+  fetch("/public/paused_queues")
+    .then(res => res.json())
+    .then(data => {
+      const pausedDiv = document.getElementById("pausedAlerts");
+      if (!pausedDiv) return;
+
+      if (!Array.isArray(data) || data.length === 0) {
+        pausedDiv.innerHTML = "";
+        return;
+      }
+
+      pausedDiv.innerHTML = data
+        .map(q => `! ${q.name} queue has been paused`)
+        .join("<br>");
+    });
+}
 
 
-setInterval(checkNowServing, 5000);
+setInterval(() => {
+  checkNowServing();
+  checkPausedQueues();
+}, 5000);
 
 function openNotifications(btn) {
-  // switch page like before
   switchPage('notifications', btn);
 
-  // hide the dot when user opens notifications
+  // 🔔 load notifications immediately
+  checkNowServing();
+  checkPausedQueues();
+
   const dot = document.getElementById("notifDot");
   if (dot) dot.style.display = "none";
 }
+
 
 </script>
 
