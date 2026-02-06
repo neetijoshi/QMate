@@ -288,31 +288,41 @@ h2 {
   <div class="main-content">
 
     <!-- DASHBOARD PAGE -->
-    <div id="dashboard" class="page active">
-      <h2>Dashboard Overview</h2>
-      <div class="cards">
-  <div class="card">
-    <h4>Active Queues</h4>
-    <div class="value" id="dQueues">0</div>
+   <!-- DASHBOARD PAGE -->
+<div id="dashboard" class="page active">
+
+  <h2>Dashboard</h2>
+
+  <!-- QUEUE VISUAL BLOCK -->
+  <h3 style="margin-top:20px;color:#4d69a5;">Queues Overview</h3>
+  <div id="queueVisual"
+       style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:30px;">
   </div>
 
-  <div class="card">
-    <h4>Total Waiting</h4>
-    <div class="value" id="dWaiting">0</div>
-  </div>
-
-  <div class="card">
-    <h4>Avg Wait Time</h4>
-    <div class="value" id="dAvg">0 min</div>
-  </div>
-
-  <div class="card">
-    <h4>Efficiency</h4>
-    <div class="value" id="dEff">0%</div>
-  </div>
-</div>
-
+  <!-- KPI CARDS -->
+  <div class="cards">
+    <div class="card">
+      <h4>Active Queues</h4>
+      <div class="value" id="dQueues">0</div>
     </div>
+
+    <div class="card">
+      <h4>Total Waiting</h4>
+      <div class="value" id="dWaiting">0</div>
+    </div>
+
+    <div class="card">
+      <h4>Avg Wait Time</h4>
+      <div class="value" id="dAvg">0 min</div>
+    </div>
+
+    <div class="card">
+      <h4>Efficiency</h4>
+      <div class="value" id="dEff">0%</div>
+    </div>
+  </div>
+
+</div>
 
     <!-- MANAGE QUEUES -->
     <div id="manage" class="page">
@@ -386,6 +396,13 @@ h2 {
     <!-- REPORTS -->
     <div id="reports" class="page">
   <h2>Queue Performance Reports</h2>
+  <label style="font-weight:600;color:#4d69a5">
+  Select Queue
+</label>
+
+<select id="reportQueueSelect"
+        style="margin-bottom:20px;padding:10px;border-radius:8px">
+</select>
 
   <div class="cards">
     <div class="card">
@@ -406,6 +423,29 @@ h2 {
       <div class="value" id="rEff">0%</div>
     </div>
   </div>
+  <!-- QUEUE-WISE SECTION (ONLY FOR ALL QUEUES) -->
+<div id="queueWiseSection">
+
+  <h3 style="margin-top:40px">Queue-wise Report</h3>
+
+  <table class="queue-table">
+    <thead>
+      <tr>
+        <th>Queue</th>
+        <th>Total Tokens</th>
+        <th>Served</th>
+        <th>Waiting</th>
+        <th>Efficiency</th>
+      </tr>
+    </thead>
+    <tbody id="queueReportBody"></tbody>
+  </table>
+
+  <h3 style="margin-top:40px">Queue-wise Efficiency</h3>
+  <canvas id="queueEfficiencyChart" height="120"></canvas>
+
+</div>
+<!-- END QUEUE-WISE SECTION -->
 
   <h3 style="margin-top:30px">Hourly Load</h3>
   <table class="queue-table">
@@ -442,7 +482,10 @@ h2 {
 </div>
 <div id="toast" class="toast"></div>
 
-
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let reportInterval = null;
+</script>
 <script>
 function switchPage(event, pageName) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -452,9 +495,102 @@ function switchPage(event, pageName) {
   event.currentTarget.classList.add('active');
 
   if (pageName === "reports") {
-    loadReports();
+  loadReportQueues();
+
+  // 🔁 start real-time refresh
+  if (reportInterval) clearInterval(reportInterval);
+
+  reportInterval = setInterval(() => {
+    handleReportChange();
+  }, 5000);
+} else {
+  // ⛔ stop when leaving reports
+  if (reportInterval) {
+    clearInterval(reportInterval);
+    reportInterval = null;
   }
 }
+
+}
+function drawHourlyChart(hourly) {
+  const tbody = document.getElementById("hourlyTable");
+  tbody.innerHTML = "";
+
+  if (hourlyChart) {
+    hourlyChart.destroy();
+    hourlyChart = null;
+  }
+
+  if (!hourly || hourly.length === 0) {
+    tbody.innerHTML = "<tr><td colspan='2'>No data</td></tr>";
+    return;
+  }
+
+  const labels = [];
+  const values = [];
+
+  hourly.forEach(h => {
+    labels.push(formatHour(h.hour));
+    values.push(h.count);
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${formatHour(h.hour)}</td>
+        <td>${h.count}</td>
+      </tr>
+    `;
+  });
+
+  hourlyChart = new Chart(
+    document.getElementById("hourlyChart"),
+    {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: "Tokens per Hour",
+          data: values
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true } }
+      }
+    }
+  );
+}
+
+function drawStatusChart(data) {
+  if (statusChart) {
+    statusChart.destroy();
+    statusChart = null;
+  }
+
+  const served = data.served_tokens || 0;
+  const active = data.active_tokens || 0;
+  const scheduled = data.scheduled_tokens || 0;
+  const cancelled = data.cancelled_tokens || 0;
+
+  statusChart = new Chart(
+    document.getElementById("statusChart"),
+    {
+      type: "pie",
+      data: {
+        labels: ["Served", "Active", "Scheduled", "Cancelled"],
+        datasets: [{
+          data: [served, active, scheduled, cancelled]
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: "right" }
+        }
+      }
+    }
+  );
+}
+
 
 </script>
 <script>
@@ -727,9 +863,7 @@ function adminResume(tokenId, userName) {
 }
 
 </script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-let hourlyChart, statusChart;
 function formatHour(hour) {
   const h = Number(hour);
   const suffix = h >= 12 ? "PM" : "AM";
@@ -737,100 +871,7 @@ function formatHour(hour) {
   return `${hour12}:00 ${suffix}`;
 }
 
-function loadReports() {
-  fetch("/admin/reports")
-    .then(res => res.json())
-    .then(data => {
 
-      // Cards
-      document.getElementById("rTotal").innerText = data.total_tokens;
-      document.getElementById("rAvg").innerText = data.avg_wait + " min";
-      document.getElementById("rEff").innerText = data.efficiency + "%";
-
-      // ---------- HOURLY TABLE ----------
-      const tbody = document.getElementById("hourlyTable");
-      tbody.innerHTML = "";
-
-      if (!data.hourly || data.hourly.length === 0) {
-        tbody.innerHTML = "<tr><td colspan='2'>No data yet</td></tr>";
-      } else {
-        data.hourly.forEach(h => {
-          tbody.innerHTML += `
-            <tr>
-              <td>${formatHour(h.hour)}</td>
-              <td>${h.count}</td>
-            </tr>
-          `;
-        });
-      }
-
-      // ---------- HOURLY BAR CHART ----------
-      function formatHour(hour) {
-  const h = Number(hour);
-  const suffix = h >= 12 ? "PM" : "AM";
-  const hour12 = ((h + 11) % 12) + 1;
-  return `${hour12}:00 ${suffix}`;
-}
-
-      const labels = data.hourly.map(h => formatHour(h.hour));
-      const values = data.hourly.map(h => h.count);
-
-      if (hourlyChart) hourlyChart.destroy();
-
-      hourlyChart = new Chart(
-        document.getElementById("hourlyChart"),
-        {
-          type: "bar",
-          data: {
-            labels: labels,
-            datasets: [{
-              label: "Tokens per Hour",
-              data: values
-            }]
-          },
-          options: {
-            responsive: true,
-            scales: {
-              y: {
-                beginAtZero: true
-              }
-            }
-          }
-        }
-      );
-
-      // ---------- STATUS PIE CHART ----------
-      if (statusChart) statusChart.destroy();
-
-statusChart = new Chart(
-  document.getElementById("statusChart"),
-  {
-    type: "pie",
-    data: {
-      labels: ["Served", "Active", "Scheduled", "Cancelled"],
-      datasets: [{
-        data: [
-          data.served_tokens,
-          data.active_tokens,
-          data.scheduled_tokens,
-          data.cancelled_tokens
-        ]
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: {
-          position: "right"
-        }
-      }
-    }
-  }
-);
-
-  
-    });
-}
 </script>
 <script>
 function loadDashboardStats() {
@@ -878,7 +919,188 @@ function pauseQueue(queueId) {
   });
 }
 </script>
+<script>
+function loadQueueVisual() {
+  fetch("/admin/queue_status")
+    .then(res => res.json())
+    .then(data => {
+      const container = document.getElementById("queueVisual");
+      container.innerHTML = "";
+
+      data.forEach(q => {
+        let people = "";
+        for (let i = 0; i < q.waiting; i++) {
+          people += `
+            <div style="
+              width:22px;
+              height:22px;
+              background:#4d69a5;
+              border-radius:6px;
+            "></div>
+          `;
+        }
+
+        container.innerHTML += `
+          <div style="
+            background:#fff;
+            padding:16px;
+            border-radius:12px;
+            width:220px;
+            box-shadow:0 4px 10px rgba(0,0,0,0.1)
+          ">
+            <h4 style="margin:0;color:#4d69a5">${q.name}</h4>
+            <p style="font-size:13px;color:#666">Waiting: ${q.waiting}</p>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${people || "<span style='color:#999'>No waiting</span>"}
+            </div>
+          </div>
+        `;
+      });
+    });
+}
+
+loadQueueVisual();
+setInterval(loadQueueVisual, 5000);
+</script>
+<script>
+function loadQueueReports() {
+  fetch("/admin/reports/queues")
+    .then(res => res.json())
+    .then(data => {
+      const tbody = document.getElementById("queueReportBody");
+      tbody.innerHTML = "";
+
+      if (!data || data.length === 0) {
+        tbody.innerHTML =
+          "<tr><td colspan='5'>No report data available</td></tr>";
+        return;
+      }
+
+      data.forEach(q => {
+        tbody.innerHTML += `
+          <tr>
+            <td>${q.queue}</td>
+            <td>${q.total}</td>
+            <td>${q.served}</td>
+            <td>${q.waiting}</td>
+            <td>${q.efficiency}%</td>
+          </tr>
+        `;
+      });
+
+      drawQueueEfficiencyChart(data);
+    })
+    .catch(err => {
+      console.error(err);
+    });
+}
+</script>
+<script>
+let queueEffChart;
+
+function drawQueueEfficiencyChart(data) {
+  const labels = data.map(q => q.queue);
+  const values = data.map(q => q.efficiency);
+
+  if (queueEffChart) queueEffChart.destroy();
+
+  queueEffChart = new Chart(
+    document.getElementById("queueEfficiencyChart"),
+    {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: "Efficiency (%)",
+          data: values
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true, max: 100 }
+        }
+      }
+    }
+  );
+}
+</script>
+
+<script>
+let hourlyChart = null;
+let statusChart = null;
+
+/* ================= DROPDOWN ================= */
+function loadReportQueues() {
+  fetch("/admin/my_services")
+    .then(res => res.json())
+    .then(data => {
+      const select = document.getElementById("reportQueueSelect");
+      select.innerHTML = `<option value="all">All Queues</option>`;
+
+      data.forEach(q => {
+        const opt = document.createElement("option");
+        opt.value = q.id;
+        opt.text = q.name;
+        select.appendChild(opt);
+      });
+
+      select.onchange = handleReportChange;
+
+      handleReportChange(); // initial load
+    });
+}
+
+function handleReportChange() {
+  const queueId = document.getElementById("reportQueueSelect").value;
+
+  if (queueId === "all") {
+    loadGlobalReport();
+  } else {
+    loadSingleQueueReport(queueId);
+  }
+}
+
+
+/* ================= GLOBAL ================= */
+function loadGlobalReport() {
+  document.getElementById("queueWiseSection").style.display = "block";
+
+  fetch("/admin/reports")
+    .then(res => res.json())
+    .then(data => {
+      // 🟦 CARDS
+      document.getElementById("rTotal").innerText = data.total_tokens;
+      document.getElementById("rAvg").innerText = data.avg_wait + " min";
+      document.getElementById("rEff").innerText = data.efficiency + "%";
+
+      // 🟦 CHARTS
+      drawHourlyChart(data.hourly);
+      drawStatusChart(data);
+
+      // 🟦 TABLE + BAR
+      loadQueueReports();
+    });
+}
+
+
+/* ================= SINGLE QUEUE ================= */
+function loadSingleQueueReport(queueId) {
+  document.getElementById("queueWiseSection").style.display = "none";
+
+  fetch(`/admin/reports/queue/${queueId}`)
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("rTotal").innerText = data.total_tokens;
+      document.getElementById("rAvg").innerText = data.avg_wait + " min";
+      document.getElementById("rEff").innerText = data.efficiency + "%";
+
+      drawHourlyChart(data.hourly);
+      drawStatusChart(data);
+    });
+}
+
+</script>
 
 </body>
 </html>
-

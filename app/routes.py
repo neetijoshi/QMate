@@ -597,7 +597,7 @@ def now_serving():
         "token_number": token.token_number
     })
 
-from sqlalchemy import func, text
+from sqlalchemy import extract, func, text
 from datetime import datetime
 
 @main.route("/admin/reports")
@@ -605,15 +605,24 @@ def admin_reports():
     if session.get("role") != "admin":
         return jsonify({"error": "Unauthorized"}), 403
 
-    total_tokens = Token.query.count()
+    admin_id = session.get("user_id")
+
+    total_tokens = Token.query.join(Queue).filter(
+        Queue.admin_id == admin_id
+    ).count()
 
     # ✅ STATUS COUNTS
     status_counts = dict(
-        db.session.query(
-            Token.status,
-            func.count(Token.id)
-        ).group_by(Token.status).all()
+    db.session.query(
+        Token.status,
+        func.count(Token.id)
     )
+    .join(Queue)
+    .filter(Queue.admin_id == admin_id)
+    .group_by(Token.status)
+    .all()
+)
+
 
     served_tokens = status_counts.get("SERVED", 0)
     active_tokens = status_counts.get("ACTIVE", 0)
@@ -621,11 +630,17 @@ def admin_reports():
     scheduled_tokens = status_counts.get("SCHEDULED", 0)
 
     # ----- AVG WAIT -----
-    served_with_time = Token.query.filter(
+    served_with_time = (
+    Token.query
+    .join(Queue)
+    .filter(
+        Queue.admin_id == admin_id,
         Token.status == "SERVED",
-        Token.served_at.isnot(None),
-        Token.created_at.isnot(None)
-    ).all()
+        Token.served_at.isnot(None)
+    )
+    .all()
+)
+
 
     if served_with_time:
         total_wait = sum(
@@ -642,21 +657,21 @@ def admin_reports():
     ) if total_tokens > 0 else 0
 
     # ----- HOURLY LOAD -----
+    
     hourly_data = (
-        db.session.query(
-            func.hour(
-                func.convert_tz(
-                    Token.created_at,
-                    '+00:00',
-                    '+05:30'
-                )
-            ).label("hour"),
-            func.count(Token.id)
-        )
-        .group_by("hour")
-        .order_by("hour")
-        .all()
+    db.session.query(
+        func.hour(
+            func.convert_tz(Token.created_at,'+00:00','+05:30')
+        ).label("hour"),
+        func.count(Token.id)
     )
+    .join(Queue)
+    .filter(Queue.admin_id == admin_id)
+    .group_by("hour")
+    .order_by("hour")
+    .all()
+)
+
 
     hourly = [
         {"hour": h, "count": c}
@@ -673,6 +688,36 @@ def admin_reports():
         "efficiency": efficiency,
         "hourly": hourly
     })
+
+@main.route("/admin/reports/queues")
+def admin_queue_reports():
+    if session.get("role") != "admin":
+        return jsonify([])
+
+    admin_id = session.get("user_id")
+
+    queues = Queue.query.filter_by(admin_id=admin_id).all()
+    result = []
+
+    for q in queues:
+        total = Token.query.filter_by(queue_id=q.id).count()
+        served = Token.query.filter_by(queue_id=q.id, status="SERVED").count()
+        waiting = Token.query.filter(
+            Token.queue_id == q.id,
+            Token.status.in_(["ACTIVE", "PAUSED", "SCHEDULED"])
+        ).count()
+
+        efficiency = round((served / total) * 100, 2) if total else 0
+
+        result.append({
+            "queue": q.name,
+            "total": total,
+            "served": served,
+            "waiting": waiting,
+            "efficiency": efficiency
+        })
+
+    return jsonify(result)
 
 @main.route("/admin/dashboard_stats")
 def admin_dashboard_stats():
@@ -837,4 +882,131 @@ def next_token():
     return jsonify({
         "message": "Token served",
         "token_number": token.token_number
+    })
+
+@main.route("/admin/reports/queue_stats")
+def queue_stats():
+    queue_id = request.args.get("queue_id")
+
+    query = Token.query
+    if queue_id:
+        query = query.filter_by(queue_id=queue_id)
+
+    total = query.count()
+    served = query.filter_by(status="SERVED").count()
+    waiting = query.filter_by(status="WAITING").count()
+
+    efficiency = round((served / total) * 100, 2) if total else 0
+
+    avg_wait = db.session.query(
+        func.avg(Token.wait_time)
+    ).filter(
+        Token.status == "SERVED",
+        *( [Token.queue_id == queue_id] if queue_id else [] )
+    ).scalar() or 0
+
+    return jsonify({
+        "total": total,
+        "served": served,
+        "waiting": waiting,
+        "efficiency": efficiency,
+        "avg_wait": round(avg_wait, 2)
+    })
+
+@main.route("/admin/reports/hourly")
+def hourly_report():
+    queue_id = request.args.get("queue_id")
+
+    query = db.session.query(
+        extract("hour", Token.created_at).label("hour"),
+        func.count(Token.id)
+    )
+
+    if queue_id:
+        query = query.filter(Token.queue_id == queue_id)
+
+    data = query.group_by("hour").order_by("hour").all()
+
+    return jsonify([
+        {"hour": int(h), "tokens": c}
+        for h, c in data
+    ])
+
+@main.route("/admin/reports/status")
+def status_report():
+    queue_id = request.args.get("queue_id")
+
+    query = db.session.query(
+        Token.status,
+        func.count(Token.id)
+    )
+
+    if queue_id:
+        query = query.filter(Token.queue_id == queue_id)
+
+    data = query.group_by(Token.status).all()
+
+    return jsonify([
+        {"status": s, "count": c}
+        for s, c in data
+    ])
+
+@main.route("/admin/reports/queue/<int:queue_id>")
+def admin_single_queue_report(queue_id):
+    if session.get("role") != "admin":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    admin_id = session.get("user_id")
+
+    tokens = (
+        Token.query
+        .join(Queue)
+        .filter(
+            Token.queue_id == queue_id,
+            Queue.admin_id == admin_id
+        )
+        .all()
+    )
+
+    total = len(tokens)
+    served = sum(t.status == "SERVED" for t in tokens)
+    active = sum(t.status == "ACTIVE" for t in tokens)
+    scheduled = sum(t.status == "SCHEDULED" for t in tokens)
+    cancelled = sum(t.status == "CANCELLED" for t in tokens)
+
+    efficiency = round((served / total) * 100, 2) if total else 0
+
+    # ⏱ Avg wait
+    waits = [
+        (t.served_at - t.created_at).total_seconds()
+        for t in tokens
+        if t.status == "SERVED" and t.served_at
+    ]
+    avg_wait = round(sum(waits) / len(waits) / 60, 2) if waits else 0
+
+    # ⏰ Hourly
+    hourly = (
+        db.session.query(
+            func.hour(
+                func.convert_tz(Token.created_at,'+00:00','+05:30')
+            ).label("hour"),
+            func.count(Token.id)
+        )
+        .filter(Token.queue_id == queue_id)
+        .group_by("hour")
+        .order_by("hour")
+        .all()
+    )
+
+    return jsonify({
+        "total_tokens": total,
+        "served_tokens": served,
+        "active_tokens": active,
+        "scheduled_tokens": scheduled,
+        "cancelled_tokens": cancelled,
+        "avg_wait": avg_wait,
+        "efficiency": efficiency,
+        "hourly": [
+            {"hour": h, "count": c} for h, c in hourly
+        ]
     })
